@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Multi-User ID Card Studio</title>
+  <!-- Excel Parser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- PDF Parser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+  </script>
+
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --card-gradient: linear-gradient(135deg, #6b21a8, #9333ea);
+      --card-border: #6b21a8;
+      --bg: #f8fafc;
+      --text: #0f172a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 20px; }
+
+    /* Auth Screen (Login / Register Choice) */
+    #auth-box {
+      max-width: 420px;
+      margin: 60px auto;
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    #auth-box h2 { margin-bottom: 8px; color: var(--primary); }
+    .auth-toggle {
+      display: flex;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      background: #e2e8f0;
+      padding: 4px;
+    }
+    .auth-toggle button {
+      flex: 1; padding: 8px; border: none; background: transparent; font-weight: 700; cursor: pointer; border-radius: 6px;
+    }
+    .auth-toggle button.active { background: white; color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.08); }
+
+    .input-group { margin-bottom: 14px; text-align: left; }
+    .input-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #334155; }
+    .input-group input, .input-group select {
+      width: 100%; padding: 9px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; font-size: 14px;
+    }
+    button.btn {
+      width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s;
+    }
+    button.btn:hover { background: #1d4ed8; }
+
+    /* Dashboard */
+    #dashboard { display: none; max-width: 1150px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; }
+    .user-pill { font-size: 14px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 5px 12px; border-radius: 20px; }
+
+    .panel { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
+    .panel h3 { margin-bottom: 15px; color: var(--primary); font-size: 16px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+    
+    .tabs { display: flex; gap: 10px; margin-bottom: 15px; }
+    .tab-btn { padding: 9px 18px; border: none; background: #e2e8f0; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .tab-btn.active { background: var(--primary); color: white; }
+
+    /* 100 TEMPLATES GRID */
+    .template-box-scroll {
+      max-height: 180px;
+      overflow-y: auto;
+      border: 1px solid #cbd5e1;
+      padding: 10px;
+      border-radius: 8px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 8px;
+      background: #f8fafc;
+    }
+    .theme-chip {
+      height: 38px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+      border: 2px solid transparent;
+      user-select: none;
+      transition: transform 0.1s;
+    }
+    .theme-chip:hover { transform: scale(1.03); }
+    .theme-chip.active-chip { border-color: #0f172a; box-shadow: 0 0 0 2px #fff inset; }
+
+    /* CARDS PREVIEW WRAPPER */
+    .cards-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+
+    /* STANDARD GENERATED ID CARD */
+    .id-card-base {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      border: 1.5px solid #94a3b8;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background-color: #ffffff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .card-top {
+      background: var(--card-gradient) !important;
+      color: white;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .header-logo {
+      object-fit: contain;
+      background: white;
+      border-radius: 50%;
+      padding: 2px;
+      flex-shrink: 0;
+    }
+    .school-title-area { flex: 1; text-align: center; padding: 0 6px; }
+    .school-title-area h3 {
+      font-size: 15px;
+      text-transform: uppercase;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+    .school-title-area .tag-id {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      display: inline-block;
+      margin-top: 2px;
+      background: rgba(255, 255, 255, 0.25);
+      padding: 1px 7px;
+      border-radius: 4px;
+      color: #ffffff;
+    }
+    .school-title-area .session-text {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      display: block;
+      margin-top: 2px;
+      color: #ffffff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+
+    /* Landscape Mode */
+    .mode-landscape { width: 480px; height: 285px; }
+    .mode-landscape .card-top { height: 72px; }
+    .mode-landscape .header-logo { width: 44px; height: 44px; }
+    .mode-landscape .card-body { display: flex; flex: 1; padding: 12px 14px 10px; gap: 15px; }
+    .mode-landscape .card-details-left { flex: 1.35; font-size: 13px; line-height: 1.5; }
+    .mode-landscape .card-details-left table { width: 100%; border-collapse: collapse; }
+    .mode-landscape .card-details-left td { padding: 3px 0; vertical-align: middle; }
+    .mode-landscape .card-details-left td.label { font-weight: 700; width: 38%; color: #334155; }
+    .mode-landscape .card-details-left td.val { font-weight: 600; color: #0f172a; }
+
+    .mode-landscape .card-right-section {
+      flex: 0.85; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      border-left: 1px dashed #cbd5e1; padding-left: 10px;
+    }
+    .mode-landscape .student-photo-box {
+      width: 95px; height: 115px; border: 2px solid var(--card-border); border-radius: 6px; overflow: hidden;
+      background: #f1f5f9; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;
+    }
+    .mode-landscape .student-photo-box img { width: 100%; height: 100%; object-fit: cover; }
+    .mode-landscape .sign-area { margin-top: auto; text-align: center; width: 100%; padding-bottom: 6px; }
+    .mode-landscape .sign-area .sign-line { width: 85%; border-top: 1px solid #475569; margin: 0 auto 4px auto; }
+    .mode-landscape .sign-area span { font-size: 11px; font-weight: 700; color: #1e293b; display: block; }
+
+    /* Portrait Mode */
+    .mode-portrait { width: 320px; height: 480px; }
+    .mode-portrait .card-top { height: 75px; padding: 6px 8px; }
+    .mode-portrait .header-logo { width: 40px; height: 40px; }
+    .mode-portrait .school-title-area h3 { font-size: 13px; }
+    .mode-portrait .card-body { display: flex; flex-direction: column; flex: 1; padding: 12px 14px; align-items: center; }
+    .mode-portrait .student-photo-box {
+      width: 105px; height: 105px; border-radius: 50%; border: 3px solid var(--card-border); overflow: hidden;
+      margin: 4px auto 10px; background: #f8fafc; flex-shrink: 0;
+    }
+    .mode-portrait .student-photo-box img { width: 100%; height: 100%; object-fit: cover; }
+    .mode-portrait .card-details-left { width: 100%; font-size: 12.5px; line-height: 1.5; }
+    .mode-portrait .card-details-left table { width: 100%; border-collapse: collapse; }
+    .mode-portrait .card-details-left td { padding: 3px 0; vertical-align: top; }
+    .mode-portrait .card-details-left td.label { font-weight: 700; width: 38%; color: #334155; }
+    .mode-portrait .card-details-left td.val { font-weight: 600; color: #0f172a; }
+    .mode-portrait .card-right-section { width: 100%; margin-top: auto; }
+    .mode-portrait .sign-area { text-align: right; width: 100%; padding-top: 8px; }
+    .mode-portrait .sign-area span { font-size: 11px; font-weight: 700; color: #1e293b; }
+
+    /* Print settings */
+    @media print {
+      body { background: white; padding: 0; }
+      body * { visibility: hidden; }
+      .cards-container, .cards-container * { visibility: visible; }
+      .cards-container { position: absolute; left: 0; top: 0; width: 100%; display: flex; flex-wrap: wrap; gap: 15px; padding: 10px; }
+      .no-print { display: none !important; }
+      .id-card-base { box-shadow: none; page-break-inside: avoid; margin-bottom: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. AUTH SCREEN (REGISTER / LOGIN CHOICE) -->
+  <div id="auth-box">
+    <h2 id="auth-heading">Naya Account Banayein</h2>
+    <p style="font-size: 12px; color: #64748b; margin-bottom: 15px;">Apna data safe rakhne ke liye username aur password set karein.</p>
+    
+    <div class="auth-toggle">
+      <button id="tab-reg" class="active" onclick="toggleAuth('register')">Register (Set Password)</button>
+      <button id="tab-login" onclick="toggleAuth('login')">Login</button>
+    </div>
+
+    <div class="input-group">
+      <label>User Name</label>
+      <input type="text" id="auth-user" placeholder="Choose a username">
+    </div>
+    <div class="input-group">
+      <label>Password</label>
+      <input type="password" id="auth-pass" placeholder="Enter password">
+    </div>
+    <div class="input-group" id="confirm-pass-box">
+      <label>Confirm Password</label>
+      <input type="password" id="auth-pass-confirm" placeholder="Re-enter password">
+    </div>
+
+    <button class="btn" id="auth-submit-btn" onclick="handleAuthSubmit()">Account Banayein & Shuru Karein</button>
+  </div>
+
+  <!-- 2. MAIN DASHBOARD -->
+  <div id="dashboard">
+    <div class="header">
+      <div>
+        <h2>ID Card Studio Pro</h2>
+        <span class="user-pill" id="logged-user-tag">User: -</span>
+      </div>
+      <button class="btn" style="width: auto; background: #dc2626;" onclick="handleLogout()">Save & Logout</button>
+    </div>
+
+    <!-- 100 TEMPLATES & SETTINGS -->
+    <div class="panel no-print">
+      <h3>1. Select from 100 Built-in Color Templates</h3>
+      <div class="template-box-scroll" id="template-chips-container"></div>
+
+      <div class="form-grid" style="margin-top: 15px;">
+        <div class="input-group">
+          <label>Card Orientation</label>
+          <select id="cfg-orientation" onchange="saveUserData(); renderAllCards();">
+            <option value="landscape" selected>Landscape (Horizontal)</option>
+            <option value="portrait">Portrait (Vertical)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Default Session</label>
+          <input type="text" id="cfg-default-session" value="2025-27" placeholder="e.g. 2025-27" oninput="saveUserData(); renderAllCards();">
+        </div>
+        <div class="input-group">
+          <label>School / College Name</label>
+          <input type="text" id="cfg-school-name" value="DELHI PUBLIC SCHOOL" placeholder="Enter School Name" oninput="saveUserData(); renderAllCards();">
+        </div>
+        <div class="input-group">
+          <label>Left Logo</label>
+          <input type="file" id="cfg-logo-left" accept="image/*" onchange="previewLogo('left')">
+        </div>
+        <div class="input-group">
+          <label>Right Logo</label>
+          <input type="file" id="cfg-logo-right" accept="image/*" onchange="previewLogo('right')">
+        </div>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs no-print">
+      <button class="tab-btn active" onclick="switchTab('manual')">1. Manual Entry</button>
+      <button class="tab-btn" onclick="switchTab('excel')">2. Upload File (Excel / CSV / PDF)</button>
+    </div>
+
+    <!-- MANUAL FORM -->
+    <div id="manual-panel" class="panel no-print">
+      <div class="form-grid">
+        <div class="input-group">
+          <label>Full Name</label>
+          <input type="text" id="m-name" placeholder="Student Name">
+        </div>
+        <div class="input-group">
+          <label>Session</label>
+          <input type="text" id="m-session" placeholder="e.g. 2025-27" value="2025-27">
+        </div>
+        <div class="input-group">
+          <label>Father's Name</label>
+          <input type="text" id="m-fname" placeholder="Father's Name">
+        </div>
+        <div class="input-group">
+          <label>Mother's Name</label>
+          <input type="text" id="m-mname" placeholder="Mother's Name">
+        </div>
+        <div class="input-group">
+          <label>Class</label>
+          <input type="text" id="m-class" placeholder="e.g. 10th-A">
+        </div>
+        <div class="input-group">
+          <label>SR Number</label>
+          <input type="text" id="m-sr" placeholder="e.g. 2509">
+        </div>
+        <div class="input-group">
+          <label>Date of Birth</label>
+          <input type="date" id="m-dob">
+        </div>
+        <div class="input-group">
+          <label>Student Photo</label>
+          <input type="file" id="m-photo" accept="image/*">
+        </div>
+      </div>
+      <button class="btn" style="margin-top: 15px;" onclick="addManualCard()">Generate ID Card</button>
+    </div>
+
+    <!-- FILE UPLOAD PANEL -->
+    <div id="excel-panel" class="panel no-print" style="display:none;">
+      <p style="margin-bottom: 12px; font-size: 14px; color: #475569;">
+        Excel (.xlsx, .xls, .csv) ya PDF upload karein (order kuch bhi chalega, data automatically aapke account me save hoga).
+      </p>
+      <input type="file" id="bulk-file" accept=".xlsx, .xls, .csv, .pdf" style="margin-bottom: 15px;">
+      <button class="btn" onclick="handleFileUpload()">Upload & Process Data</button>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="no-print" style="margin-bottom: 20px; display: flex; gap: 10px;">
+      <button class="btn" style="background: #16a34a; width: auto;" onclick="window.print()">Print / Download PDF</button>
+      <button class="btn" style="background: #64748b; width: auto;" onclick="clearCards()">Clear All Cards</button>
+    </div>
+
+    <!-- CARDS PREVIEW -->
+    <div class="cards-container" id="cards-container"></div>
+  </div>
+
+  <script>
+    let authMode = 'register'; // 'register' ya 'login'
+    let currentUser = null;
+    let studentsData = [];
+    let leftLogoData = 'https://via.placeholder.com/44/ffffff/1e3a8a?text=LOGO';
+    let rightLogoData = 'https://via.placeholder.com/44/ffffff/1e3a8a?text=LOGO';
+
+    /* ========================================================
+       AUTH SYSTEM WITH ISOLATED DATA STORAGE
+       ======================================================== */
+    function toggleAuth(mode) {
+      authMode = mode;
+      document.getElementById('tab-reg').classList.toggle('active', mode === 'register');
+      document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+
+      if (mode === 'register') {
+        document.getElementById('auth-heading').innerText = 'Naya Account Banayein';
+        document.getElementById('confirm-pass-box').style.display = 'block';
+        document.getElementById('auth-submit-btn').innerText = 'Account Banayein & Shuru Karein';
+      } else {
+        document.getElementById('auth-heading').innerText = 'Apne Account Me Login Karein';
+        document.getElementById('confirm-pass-box').style.display = 'none';
+        document.getElementById('auth-submit-btn').innerText = 'Login & Data Kholein';
+      }
+    }
+
+    function handleAuthSubmit() {
+      const u = document.getElementById('auth-user').value.trim().toLowerCase();
+      const p = document.getElementById('auth-pass').value.trim();
+
+      if (!u || !p) {
+        alert("Username aur Password dono fill karein!");
+        return;
+      }
+
+      // Check users database in localStorage
+      let usersDB = JSON.parse(localStorage.getItem('idcard_users_db') || '{}');
+
+      if (authMode === 'register') {
+        const cp = document.getElementById('auth-pass-confirm').value.trim();
+        if (p !== cp) {
+          alert("Password aur Confirm Password match nahi ho rahe!");
+          return;
+        }
+        if (usersDB[u]) {
+          alert("Yeh username pehle se registered hai! Kripya Login karein ya dusra naam chunein.");
+          return;
+        }
+
+        // Save new user profile
+        usersDB[u] = { password: p };
+        localStorage.setItem('idcard_users_db', JSON.stringify(usersDB));
+        alert("Account successfully ban gaya! Ab aap login kar rahe hain.");
+        loginUser(u);
+      } else {
+        // Login Mode
+        if (!usersDB[u] || usersDB[u].password !== p) {
+          alert("Galat Username ya Password! Kripya dobara check karein.");
+          return;
+        }
+        loginUser(u);
+      }
+    }
+
+    function loginUser(username) {
+      currentUser = username;
+      document.getElementById('auth-box').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      document.getElementById('logged-user-tag').innerText = `User: ${username}`;
+
+      // Load user's private data
+      loadUserData();
+    }
+
+    function saveUserData() {
+      if (!currentUser) return;
+      const userStorageKey = `idcard_data_${currentUser}`;
+      const payload = {
+        schoolName: document.getElementById('cfg-school-name').value,
+        orientation: document.getElementById('cfg-orientation').value,
+        defaultSession: document.getElementById('cfg-default-session').value,
+        leftLogo: leftLogoData,
+        rightLogo: rightLogoData,
+        themeGradient: document.documentElement.style.getPropertyValue('--card-gradient'),
+        themeBorder: document.documentElement.style.getPropertyValue('--card-border'),
+        students: studentsData
+      };
+      localStorage.setItem(userStorageKey, JSON.stringify(payload));
+    }
+
+    function loadUserData() {
+      if (!currentUser) return;
+      const userStorageKey = `idcard_data_${currentUser}`;
+      const saved = localStorage.getItem(userStorageKey);
+
+      if (saved) {
+        const data = JSON.parse(saved);
+        document.getElementById('cfg-school-name').value = data.schoolName || 'DELHI PUBLIC SCHOOL';
+        document.getElementById('cfg-orientation').value = data.orientation || 'landscape';
+        document.getElementById('cfg-default-session').value = data.defaultSession || '2025-27';
+        leftLogoData = data.leftLogo || leftLogoData;
+        rightLogoData = data.rightLogo || rightLogoData;
+        if (data.themeGradient) document.documentElement.style.setProperty('--card-gradient', data.themeGradient);
+        if (data.themeBorder) document.documentElement.style.setProperty('--card-border', data.themeBorder);
+        studentsData = data.students || [];
+      } else {
+        studentsData = [];
+      }
+      renderAllCards();
+    }
+
+    function handleLogout() {
+      saveUserData();
+      currentUser = null;
+      document.getElementById('dashboard').style.display = 'none';
+      document.getElementById('auth-box').style.display = 'block';
+      document.getElementById('auth-user').value = '';
+      document.getElementById('auth-pass').value = '';
+      document.getElementById('auth-pass-confirm').value = '';
+      studentsData = [];
+      renderAllCards();
+    }
+
+    /* ========================================================
+       100 COLOR GRADIENT TEMPLATES
+       ======================================================== */
+    const baseHues = [
+      { name: 'Purple', c1: '#6b21a8', c2: '#9333ea' },
+      { name: 'Navy', c1: '#1e3a8a', c2: '#3b82f6' },
+      { name: 'Emerald', c1: '#065f46', c2: '#10b981' },
+      { name: 'Ruby', c1: '#881337', c2: '#f43f5e' },
+      { name: 'Amber', c1: '#78350f', c2: '#f59e0b' },
+      { name: 'Slate', c1: '#0f172a', c2: '#475569' },
+      { name: 'Teal', c1: '#134e4a', c2: '#14b8a6' },
+      { name: 'Crimson', c1: '#7f1d1d', c2: '#ef4444' },
+      { name: 'Indigo', c1: '#312e81', c2: '#6366f1' },
+      { name: 'Cyan', c1: '#164e63', c2: '#06b6d4' }
+    ];
+
+    const templates100 = [];
+    for (let i = 1; i <= 100; i++) {
+      const base = baseHues[(i - 1) % baseHues.length];
+      const angle = (i * 29) % 360;
+      templates100.push({
+        id: i,
+        name: `Style #${i}`,
+        gradient: `linear-gradient(${angle}deg, ${base.c1}, ${base.c2})`,
+        border: base.c1
+      });
+    }
+
+    function initTemplateSelector() {
+      const container = document.getElementById('template-chips-container');
+      container.innerHTML = '';
+      templates100.forEach((t, idx) => {
+        const chip = document.createElement('div');
+        chip.className = `theme-chip ${idx === 0 ? 'active-chip' : ''}`;
+        chip.style.background = t.gradient;
+        chip.innerText = t.name;
+        chip.onclick = function() {
+          document.querySelectorAll('.theme-chip').forEach(c => c.classList.remove('active-chip'));
+          chip.classList.add('active-chip');
+          document.documentElement.style.setProperty('--card-gradient', t.gradient);
+          document.documentElement.style.setProperty('--card-border', t.border);
+          saveUserData();
+          renderAllCards();
+        };
+        container.appendChild(chip);
+      });
+    }
+    initTemplateSelector();
+
+    function previewLogo(side) {
+      const fileInput = document.getElementById(side === 'left' ? 'cfg-logo-left' : 'cfg-logo-right');
+      if (fileInput.files && fileInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          if (side === 'left') leftLogoData = e.target.result;
+          else rightLogoData = e.target.result;
+          saveUserData();
+          renderAllCards();
+        };
+        reader.readAsDataURL(fileInput.files[0]);
+      }
+    }
+
+    function switchTab(tab) {
+      const btns = document.querySelectorAll('.tab-btn');
+      btns.forEach(b => b.classList.remove('active'));
+      if (tab === 'manual') {
+        btns[0].classList.add('active');
+        document.getElementById('manual-panel').style.display = 'block';
+        document.getElementById('excel-panel').style.display = 'none';
+      } else {
+        btns[1].classList.add('active');
+        document.getElementById('manual-panel').style.display = 'none';
+        document.getElementById('excel-panel').style.display = 'block';
+      }
+    }
+
+    function normalizeKey(str) {
+      return String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function extractSmartRow(rawObj) {
+      let extracted = { name: '', session: '', fname: '', mname: '', className: '', sr: '', dob: '', photo: '' };
+      for (let rawKey in rawObj) {
+        if (!rawObj.hasOwnProperty(rawKey)) continue;
+        const norm = normalizeKey(rawKey);
+        const val = String(rawObj[rawKey] || '').trim();
+
+        if (norm.includes('session') || norm.includes('satra') || norm.includes('batch')) extracted.session = val;
+        else if (norm.includes('father') || norm.includes('fname') || norm.includes('pita')) extracted.fname = val;
+        else if (norm.includes('mother') || norm.includes('mname') || norm.includes('mata')) extracted.mname = val;
+        else if (norm.includes('name') || norm.includes('student') || norm.includes('vidyarthi') || norm === 'naam') {
+          if (!extracted.name) extracted.name = val;
+        } else if (norm.includes('class') || norm.includes('std') || norm.includes('grade') || norm.includes('kaksha')) extracted.className = val;
+        else if (norm.includes('sr') || norm.includes('roll') || norm.includes('reg') || norm.includes('admission') || norm.includes('id')) extracted.sr = val;
+        else if (norm.includes('dob') || norm.includes('birth') || norm.includes('janam')) extracted.dob = val;
+        else if (norm.includes('photo') || norm.includes('image') || norm.includes('pic') || norm.includes('url')) extracted.photo = val;
+      }
+      return extracted;
+    }
+
+    /* RENDER ALL CARDS */
+    function renderAllCards() {
+      const container = document.getElementById('cards-container');
+      container.innerHTML = '';
+      const orientation = document.getElementById('cfg-orientation').value;
+      const schoolName = document.getElementById('cfg-school-name').value.trim() || 'SCHOOL NAME';
+      const defaultSession = document.getElementById('cfg-default-session').value.trim() || '2025-27';
+
+      studentsData.forEach(data => {
+        const photoSrc = data.photo || 'https://via.placeholder.com/100?text=Photo';
+        const sessionVal = data.session || defaultSession;
+
+        const card = document.createElement('div');
+        if (orientation === 'landscape') {
+          card.className = 'id-card-base mode-landscape';
+          card.innerHTML = `
+            <div class="card-top">
+              <img src="${leftLogoData}" class="header-logo" alt="Logo">
+              <div class="school-title-area">
+                <h3>${schoolName}</h3>
+                <span class="tag-id">IDENTITY CARD</span>
+                <span class="session-text">${sessionVal}</span>
+              </div>
+              <img src="${rightLogoData}" class="header-logo" alt="Logo">
+            </div>
+            <div class="card-body">
+              <div class="card-details-left">
+                <table>
+                  <tr><td class="label">Name:</td><td class="val">${data.name || '-'}</td></tr>
+                  <tr><td class="label">Father:</td><td class="val">${data.fname || '-'}</td></tr>
+                  <tr><td class="label">Mother:</td><td class="val">${data.mname || '-'}</td></tr>
+                  <tr><td class="label">Class:</td><td class="val">${data.className || '-'}</td></tr>
+                  <tr><td class="label">SR No:</td><td class="val">${data.sr || '-'}</td></tr>
+                  <tr><td class="label">DOB:</td><td class="val">${data.dob || '-'}</td></tr>
+                </table>
+              </div>
+              <div class="card-right-section">
+                <div class="student-photo-box">
+                  <img src="${photoSrc}" alt="Photo">
+                </div>
+                <div class="sign-area">
+                  <div class="sign-line"></div>
+                  <span>Principal Sign</span>
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          card.className = 'id-card-base mode-portrait';
+          card.innerHTML = `
+            <div class="card-top">
+              <img src="${leftLogoData}" class="header-logo" alt="Logo">
+              <div class="school-title-area">
+                <h3>${schoolName}</h3>
+                <span class="tag-id">IDENTITY CARD</span>
+                <span class="session-text">${sessionVal}</span>
+              </div>
+              <img src="${rightLogoData}" class="header-logo" alt="Logo">
+            </div>
+            <div class="card-body">
+              <div class="student-photo-box">
+                <img src="${photoSrc}" alt="Photo">
+              </div>
+              <div class="card-details-left">
+                <table>
+                  <tr><td class="label">Name:</td><td class="val">${data.name || '-'}</td></tr>
+                  <tr><td class="label">Father:</td><td class="val">${data.fname || '-'}</td></tr>
+                  <tr><td class="label">Mother:</td><td class="val">${data.mname || '-'}</td></tr>
+                  <tr><td class="label">Class:</td><td class="val">${data.className || '-'}</td></tr>
+                  <tr><td class="label">SR No:</td><td class="val">${data.sr || '-'}</td></tr>
+                  <tr><td class="label">DOB:</td><td class="val">${data.dob || '-'}</td></tr>
+                </table>
+              </div>
+              <div class="card-right-section">
+                <div class="sign-area">
+                  <span>Principal Sign</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        container.appendChild(card);
+      });
+    }
+
+    function addManualCard() {
+      const name = document.getElementById('m-name').value.trim();
+      const session = document.getElementById('m-session').value.trim();
+      const fname = document.getElementById('m-fname').value.trim();
+      const mname = document.getElementById('m-mname').value.trim();
+      const className = document.getElementById('m-class').value.trim();
+      const sr = document.getElementById('m-sr').value.trim();
+      const dob = document.getElementById('m-dob').value;
+      const photoInput = document.getElementById('m-photo');
+
+      if (!name || !sr) {
+        alert("Name aur SR Number bharna zaroori hai!");
+        return;
+      }
+
+      if (photoInput.files && photoInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          studentsData.push({ name, session, fname, mname, className, sr, dob, photo: e.target.result });
+          saveUserData();
+          renderAllCards();
+        };
+        reader.readAsDataURL(photoInput.files[0]);
+      } else {
+        studentsData.push({ name, session, fname, mname, className, sr, dob, photo: '' });
+        saveUserData();
+        renderAllCards();
+      }
+
+      document.getElementById('m-name').value = '';
+      document.getElementById('m-fname').value = '';
+      document.getElementById('m-mname').value = '';
+      document.getElementById('m-class').value = '';
+      document.getElementById('m-sr').value = '';
+      document.getElementById('m-dob').value = '';
+      photoInput.value = '';
+    }
+
+    function handleFileUpload() {
+      const fileInput = document.getElementById('bulk-file');
+      if (!fileInput.files.length) {
+        alert("File select karein!");
+        return;
+      }
+      const file = fileInput.files[0];
+      const filename = file.name.toLowerCase();
+
+      if (filename.endsWith('.pdf')) {
+        parsePDFFile(file);
+      } else {
+        parseExcelFile(file);
+      }
+    }
+
+    function parseExcelFile(file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet);
+
+        let count = 0;
+        rows.forEach(row => {
+          const parsed = extractSmartRow(row);
+          if (parsed.name || parsed.sr) {
+            studentsData.push(parsed);
+            count++;
+          }
+        });
+        saveUserData();
+        renderAllCards();
+        alert(`${count} Records import aur safe save ho gaye!`);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function parsePDFFile(file) {
+      const reader = new FileReader();
+      reader.onload = function() {
+        const typedarray = new Uint8Array(this.result);
+        pdfjsLib.getDocument(typedarray).promise.then(async function(pdf) {
+          let fullText = "";
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            fullText += textContent.items.map(item => item.str).join(" \n ") + "\n---PAGE---\n";
+          }
+          parseTextToCards(fullText);
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function parseTextToCards(text) {
+      const lines = text.split('\n');
+      let currentStudent = {};
+      let count = 0;
+
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        if (trimmed.includes(':') || trimmed.includes('-')) {
+          const separator = trimmed.includes(':') ? ':' : '-';
+          const parts = trimmed.split(separator);
+          const temp = {};
+          temp[parts[0]] = parts.slice(1).join(separator).trim();
+          const mapped = extractSmartRow(temp);
+          for (let prop in mapped) {
+            if (mapped[prop]) currentStudent[prop] = mapped[prop];
+          }
+        }
+
+        if ((currentStudent.name && currentStudent.sr) && (trimmed.includes('---PAGE---') || trimmed.toLowerCase().includes('end'))) {
+          studentsData.push({ ...currentStudent });
+          count++;
+          currentStudent = {};
+        }
+      });
+
+      if (currentStudent.name || currentStudent.sr) {
+        studentsData.push(currentStudent);
+        count++;
+      }
+
+      saveUserData();
+      renderAllCards();
+      alert(`PDF se ${count} Records import aur save ho gaye!`);
+    }
+
+    function clearCards() {
+      if (confirm("Kya aap sach me saare cards clear karna chahte hain?")) {
+        studentsData = [];
+        saveUserData();
+        renderAllCards();
+      }
+    }
+  </script>
+</body>
+</html>
